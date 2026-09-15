@@ -474,7 +474,8 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
     parts.append(fr"\label{{{spec.label}}}")
     if spec.wrap == "threeparttable":
         parts.append(r"\begin{threeparttable}")
-    parts.append(fr"\fontsize{{{spec.fontsize_pt[0]}}}{{{spec.fontsize_pt[1]}}}\selectfont")
+    if spec.fontsize_pt:
+        parts.append(fr"\fontsize{{{spec.fontsize_pt[0]}}}{{{spec.fontsize_pt[1]}}}\selectfont")
     parts.append(latex_body)
     if spec.wrap == "threeparttable":
         if spec.notes:
