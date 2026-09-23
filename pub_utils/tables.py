@@ -180,7 +180,11 @@ def _infer_si_spec_for_series(s: pd.Series, decimals: int) -> tuple[int, int, in
 # 24.10.: upgrade to si v3
 
 def _build_column_format(df: pd.DataFrame, spec: TableSpec) -> str:
-    n_idx = df.index.nlevels
+    # when use_index is False the index column is not rendered by
+    # df.to_latex, so the column format must not reserve index columns
+    # (a spurious extra 'l' shifted every generated table's columns and
+    # produced row-level overfull boxes; fixed 2026-09-23)
+    n_idx = df.index.nlevels if spec.use_index else 0
     if not spec.use_siunitx:
         pieces = ["l" * n_idx]
         for col in df.columns:
@@ -196,7 +200,9 @@ def _build_column_format(df: pd.DataFrame, spec: TableSpec) -> str:
         return "".join(pieces)
 
     decimals = _decimals_from_floatfmt(spec.float_fmt)
-    pieces: list[str] = ["l" * n_idx]
+    # index columns are only reserved when the index is rendered
+    # (see the use_index note above; fixed 2026-09-23)
+    pieces: list[str] = ["l" * (df.index.nlevels if spec.use_index else 0)]
     for col in df.columns:
         leaf = col[-1] if isinstance(col, tuple) else col
         col_data = df[col]
@@ -361,7 +367,7 @@ def df_to_latex(df: pd.DataFrame, spec: TableSpec) -> str:
     # Header overrides/centering before rendering
     df = _apply_header_overrides(df, spec)
 
-    n_idx = df.index.nlevels
+    n_idx = df.index.nlevels if spec.use_index else 0
     n_dat = df.shape[1]
 
     colfmt = spec.column_format or _build_column_format(df, spec)
