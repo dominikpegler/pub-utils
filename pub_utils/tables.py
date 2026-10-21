@@ -115,6 +115,9 @@ class TableSpec:
     notes_in_caption: bool = False
     # original (Title Case) caption for the APA twin written to <stem>_apa.tex
     caption_apa: Optional[str] = None
+    # column format for the APA twin (defaults to spec.column_format);
+    # lets the elsarticle table wrap a column that the APA table does not
+    column_format_apa: Optional[str] = None
 
     
     
@@ -521,11 +524,15 @@ def write_table(df: pd.DataFrame, out_path: Path, spec: TableSpec) -> Path:
 
     # APA twin: the original style (notes in tablenotes, original caption) is
     # written under <stem>_apa.tex next to the elsarticle-style main file.
+    # column_format_apa also switches the twin back to a plain tabular
+    # (use_tabularx=False), because the twin replicates the original layout.
     if spec.notes_in_caption and spec.notes:
         apa_spec = replace(
             spec,
             notes_in_caption=False,
             caption=(spec.caption_apa if spec.caption_apa is not None else spec.caption),
+            column_format=(spec.column_format_apa if spec.column_format_apa is not None else spec.column_format),
+            use_tabularx=(False if spec.column_format_apa is not None else spec.use_tabularx),
         )
         apa_body = df_to_latex(df, apa_spec)
         apa_path = out_path.with_name(out_path.stem + "_apa" + out_path.suffix)
