@@ -28,7 +28,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -111,6 +111,10 @@ class TableSpec:
     post_latex: Optional[Callable[[str, "TableSpec"], str]] = None
     align_text_as_r: Optional[set[str]] = None
     group_cmidrules_skip: Optional[set[str]] = None
+    # elsarticle variant: merge notes into the caption instead of tablenotes
+    notes_in_caption: bool = False
+    # original (Title Case) caption for the APA twin written to <stem>_apa.tex
+    caption_apa: Optional[str] = None
 
     
     
@@ -354,7 +358,12 @@ def _brace_s_column_headers(body: str, colfmt: str) -> str:
                 new_cells = []
                 for cell, ct in zip(cells, aligned_types):
                     cell_stripped = cell.strip()
-                    if ct == 'S' and not (cell_stripped.startswith('{') and cell_stripped.endswith('}')):
+                    # \multicolumn/\multirow must be the first token in a
+                    # cell; wrapping them in braces raises "Misplaced \omit".
+                    if (ct == 'S'
+                            and 'multicolumn' not in cell_stripped
+                            and 'multirow' not in cell_stripped
+                            and not (cell_stripped.startswith('{') and cell_stripped.endswith('}'))):
                         new_cells.append(' {' + cell_stripped + '} ')
                     else:
                         new_cells.append(cell)
@@ -372,6 +381,11 @@ def df_to_latex(df: pd.DataFrame, spec: TableSpec) -> str:
 
     colfmt = spec.column_format or _build_column_format(df, spec)
     longtable = spec.wrap == "longtable"
+    # For longtables the caption comes from df.to_latex; merge notes there
+    # when they are meant to live in the caption.
+    caption_for_latex = spec.caption
+    if longtable and spec.notes_in_caption and spec.notes:
+        caption_for_latex = f"{spec.caption} {spec.notes}"
     body = df.to_latex(
         index=spec.use_index,
         escape=False,
@@ -382,7 +396,7 @@ def df_to_latex(df: pd.DataFrame, spec: TableSpec) -> str:
         multirow=False,
         float_format=spec.float_fmt.format,
         longtable=longtable,
-        caption=(spec.caption if longtable else None),
+        caption=(caption_for_latex if longtable else None),
         label=(spec.label if longtable else None),
     )
 
@@ -461,6 +475,12 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
     star = spec.star if spec.star is not None else (spec.width == "2col")
     tbl_env = "table*" if star else "table"
 
+    # Caption: merge notes into the caption in elsarticle mode;
+    # otherwise keep the note out of the caption.
+    caption = spec.caption
+    if spec.notes_in_caption and spec.notes:
+        caption = f"{spec.caption} {spec.notes}"
+
     # Safe placement for two-column floats under IEEEtran
     placement_effective = spec.placement
     if star:
@@ -476,7 +496,7 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
     parts: list[str] = []
     parts.append(fr"\begin{{{tbl_env}}}{place_opt}")
     parts.append(r"\centering")
-    parts.append(fr"\caption{{{spec.caption}}}")
+    parts.append(fr"\caption{{{caption}}}")
     parts.append(fr"\label{{{spec.label}}}")
     if spec.wrap == "threeparttable":
         parts.append(r"\begin{threeparttable}")
@@ -484,7 +504,7 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
         parts.append(fr"\fontsize{{{spec.fontsize_pt[0]}}}{{{spec.fontsize_pt[1]}}}\selectfont")
     parts.append(latex_body)
     if spec.wrap == "threeparttable":
-        if spec.notes:
+        if spec.notes and not spec.notes_in_caption:
             parts.append(r"\begin{tablenotes}")
             parts.append(fr"\item \textit{{Note.}} {spec.notes}")
             parts.append(r"\end{tablenotes}")
@@ -498,6 +518,18 @@ def write_table(df: pd.DataFrame, out_path: Path, spec: TableSpec) -> Path:
     wrapped = wrap_table(body, spec)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(wrapped)
+
+    # APA twin: the original style (notes in tablenotes, original caption) is
+    # written under <stem>_apa.tex next to the elsarticle-style main file.
+    if spec.notes_in_caption and spec.notes:
+        apa_spec = replace(
+            spec,
+            notes_in_caption=False,
+            caption=(spec.caption_apa if spec.caption_apa is not None else spec.caption),
+        )
+        apa_body = df_to_latex(df, apa_spec)
+        apa_path = out_path.with_name(out_path.stem + "_apa" + out_path.suffix)
+        apa_path.write_text(wrap_table(apa_body, apa_spec))
     return out_path
 
 
