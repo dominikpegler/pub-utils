@@ -306,15 +306,23 @@ def _insert_group_cmidrules(body: str, df: pd.DataFrame, spec: TableSpec) -> str
 
 
 def _insert_midrule_before_rows(body: str, spec: TableSpec) -> str:
+    """Insert \\midrule before every row whose first cell matches a listed pattern.
+
+    Patterns are matched with startswith on the stripped row line. Callers
+    passing a single pattern keep the former single-insert behavior because a
+    matching row occurs once; callers passing several patterns get one midrule
+    per matching row.
+    """
     if not spec.midrule_before_rows:
         return body
     lines = body.splitlines()
-    for idx, ln in enumerate(lines):
-        txt = ln.strip()
-        if any(txt.startswith(pat) for pat in spec.midrule_before_rows):
-            lines.insert(idx, r"\midrule")
-            break
-    return "\n".join(lines)
+    out = []
+    for ln in lines:
+        stripped = ln.strip()
+        if any(stripped.startswith(pat) for pat in spec.midrule_before_rows):
+            out.append(r"\midrule")
+        out.append(ln)
+    return "\n".join(out)
 
 
 def _brace_s_column_headers(body: str, colfmt: str) -> str:
