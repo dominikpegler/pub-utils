@@ -340,6 +340,7 @@ def _brace_s_column_headers(body: str, colfmt: str) -> str:
             i += 1
 
     lines = body.splitlines()
+    in_header = True
     for k, ln in enumerate(lines):
         stripped = ln.strip()
         if (stripped.startswith(r'\toprule')
@@ -347,6 +348,11 @@ def _brace_s_column_headers(body: str, colfmt: str) -> str:
             or stripped.startswith(r'\begin')
             or stripped == ''):
             continue
+        # Header rows end at the first \midrule; brace every header row so
+        # that numeric leaf headers (e.g., "18") are typeset as text blocks
+        # instead of overflowing the S-column width (fixed 2026-10-25).
+        if stripped.startswith(r'\midrule'):
+            break
         if '&' in stripped and stripped.endswith(r'\\'):
             # Strip trailing \\ before splitting
             content = ln.rstrip()
@@ -371,7 +377,6 @@ def _brace_s_column_headers(body: str, colfmt: str) -> str:
                     else:
                         new_cells.append(cell)
                 lines[k] = ' & '.join(new_cells) + r' \\'
-            break
     return '\n'.join(lines)
 
 
