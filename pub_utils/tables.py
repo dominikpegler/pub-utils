@@ -88,6 +88,9 @@ class TableSpec:
     star: Optional[bool] = None          # override; default derives from width
     wrap: str = "threeparttable"         # "threeparttable" | "plain" | "longtable"
     fontsize_pt: tuple[int, int] = (7, 9)
+    # Interior column separation; None keeps the LaTeX default (6pt).
+    # Smaller values (3-5pt) let wide tables fit the text width.
+    tabcolsep_pt: Optional[int] = None
     notes: Optional[str] = None
     placement: Optional[str] = "!ht"     # e.g., "!ht", "H", "tbp"; None to omit []
     # Formatting
@@ -482,6 +485,13 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
         if spec.fontsize_pt:
             latex_body = (
                 f"\\begingroup\\fontsize{{{spec.fontsize_pt[0]}}}{{{spec.fontsize_pt[1]}}}\\selectfont\n"
+                + (f"\\setlength{{\\tabcolsep}}{{{spec.tabcolsep_pt}pt}}\n" if spec.tabcolsep_pt else "")
+                + f"{latex_body}\n"
+                "\\endgroup"
+            )
+        elif spec.tabcolsep_pt:
+            latex_body = (
+                f"\\begingroup\\setlength{{\\tabcolsep}}{{{spec.tabcolsep_pt}pt}}\n"
                 f"{latex_body}\n"
                 "\\endgroup"
             )
@@ -518,6 +528,8 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
         parts.append(r"\begin{threeparttable}")
     if spec.fontsize_pt:
         parts.append(fr"\fontsize{{{spec.fontsize_pt[0]}}}{{{spec.fontsize_pt[1]}}}\selectfont")
+    if spec.tabcolsep_pt:
+        parts.append(fr"\setlength{{\tabcolsep}}{{{spec.tabcolsep_pt}pt}}")
     parts.append(latex_body)
     if spec.wrap == "threeparttable":
         if spec.notes and not spec.notes_in_caption:
