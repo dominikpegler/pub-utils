@@ -529,7 +529,36 @@ def wrap_table(latex_body: str, spec: TableSpec) -> str:
     return "\n".join(parts)
 
 
+def _check_tex_ready(text: Optional[str], where: str) -> None:
+    """
+    Caption and notes are PRE-ESCAPED LaTeX text by contract. Fail loudly
+    instead of silently emitting a broken table on the two known failure
+    modes: a raw percent sign, and a bare underscore outside $...$ math spans
+    (subscript in text mode -> "! Missing $ inserted").
+    """
+    if not text:
+        return
+    m = re.search(r"(?<!\\)%", text)
+    if m:
+        s = max(0, m.start() - 40)
+        raise ValueError(
+            f"write_table {where}: unescaped % at ...{text[s:m.start() + 41]!r}; "
+            r"escape it as \% in the caption/notes before calling write_table."
+        )
+    stripped = re.sub(r"\$[^$]*\$", "", text)
+    m = re.search(r"(?<!\\)_", stripped)
+    if m:
+        s = max(0, m.start() - 40)
+        raise ValueError(
+            f"write_table {where}: bare _ at ...{stripped[s:m.start() + 41]!r}; "
+            r"avoid internal keys in prose or escape as \_."
+        )
+
+
 def write_table(df: pd.DataFrame, out_path: Path, spec: TableSpec) -> Path:
+    _check_tex_ready(spec.caption, "caption")
+    _check_tex_ready(spec.notes, "notes")
+    _check_tex_ready(spec.caption_apa, "caption_apa")
     body = df_to_latex(df, spec)
     wrapped = wrap_table(body, spec)
     out_path.parent.mkdir(parents=True, exist_ok=True)
